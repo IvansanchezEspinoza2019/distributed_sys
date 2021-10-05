@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 )
 
 type MsgMeta struct {
@@ -16,15 +17,18 @@ type MsgMeta struct {
 type File struct {
 	Filename string
 	Content  []byte
+	Creator  uint64
 }
 
 /* Client struct  */
 type Client struct {
-	Connection  net.Conn
-	ID          uint64
-	MsgChan     chan string
-	FileChan    chan string
-	GeneralChat []MsgMeta
+	Connection   net.Conn
+	ID           uint64
+	MsgChan      chan string
+	FileChan     chan string
+	GeneralChat  []MsgMeta
+	HasDirectory bool
+	DirName      string
 }
 
 /*** Client main functions ****/
@@ -105,27 +109,80 @@ func (c *Client) CloseConnection() {
 }
 
 func (c *Client) ListenForUpdates() {
-
+	var instruction string
 	for {
 		if c.Connection != nil {
-			meta := MsgMeta{}
+
 			receibe := gob.NewDecoder(c.Connection)
-			err := receibe.Decode(&meta)
+			err := receibe.Decode(&instruction)
 			if err == nil {
-				c.GeneralChat = append(c.GeneralChat, meta)
+				if instruction == "msg" {
+					meta := MsgMeta{}
+					gob.NewDecoder(c.Connection).Decode(&meta)
+					c.GeneralChat = append(c.GeneralChat, meta)
+				} else if instruction == "file" {
+					file := File{}
+					gob.NewDecoder(c.Connection).Decode(&file)
+					go c.HandleFile(&file)
+				}
 			}
 		}
 	}
 }
 
+func (c *Client) HandleFile(file *File) {
+	c.GeneralChat = append(c.GeneralChat, MsgMeta{CliID: file.Creator, MsgBody: file.Filename})
+
+	if !c.HasDirectory {
+		_, err := os.Stat("test")
+
+		if os.IsNotExist(err) {
+			var dir string = "CLIENT_" + strconv.Itoa(int(c.ID))
+			errDir := os.MkdirAll(dir, 0755)
+			if errDir != nil {
+				fmt.Println(errDir)
+				return
+			}
+			c.HasDirectory = true
+			c.DirName = dir
+			/* save the file*/
+			fileToSave, err := os.Create(c.DirName + "/" + file.Filename)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			defer fileToSave.Close()
+			_, errFile := fileToSave.Write(file.Content)
+			if errFile != nil {
+				fmt.Println(errFile)
+			}
+		}
+	} else { // this client already has a folder
+		/* save the file*/
+		fileToSave, err := os.Create(c.DirName + "/" + file.Filename)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer fileToSave.Close()
+		_, errFile := fileToSave.Write(file.Content)
+		if errFile != nil {
+			fmt.Println(errFile)
+		}
+	}
+
+}
+
 func (c *Client) PrintGlobalChat() {
+	fmt.Println("+------------------------+\n")
 	for _, msg := range c.GeneralChat {
 		if msg.CliID == c.ID {
-			fmt.Printf("\t[This client]: %s\n\n", msg.MsgBody)
+			fmt.Printf("\t\t[This client]: %s\n\n", msg.MsgBody)
 		} else {
 			fmt.Println(msg.MsgBody + "\n")
 		}
 	}
+	fmt.Println("\n+------------------------")
 }
 
 func main() {

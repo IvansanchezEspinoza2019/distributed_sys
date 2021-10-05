@@ -15,6 +15,7 @@ type MsgMeta struct {
 type File struct {
 	Filename string
 	Content  []byte
+	Creator  uint64
 }
 
 type Cli struct {
@@ -27,6 +28,7 @@ type Server struct {
 	Clients     []Cli
 	ClientIds   uint64
 	GeneralChat []MsgMeta
+	Files       []File
 }
 
 func (s *Server) Init() {
@@ -51,6 +53,19 @@ func (s *Server) Run() error {
 	} else {
 		return errors.New("error, no host provided")
 	}
+}
+
+func (s *Server) SendFile(file *File, id uint64) {
+	var instruction = "file"
+	file.Creator = id
+	s.Files = append(s.Files, *file)
+	s.GeneralChat = append(s.GeneralChat, MsgMeta{CliID: id, MsgBody: file.Filename})
+
+	for _, c := range s.Clients {
+		gob.NewEncoder(c.Con).Encode(&instruction)
+		gob.NewEncoder(c.Con).Encode(file)
+	}
+
 }
 
 func (s *Server) HandleClient(c net.Conn) {
@@ -93,9 +108,11 @@ func (s *Server) HandleClient(c net.Conn) {
 			} else if instruction == "post_file" {
 				f := File{}
 				receibeFile := gob.NewDecoder(c)
-				errXD := receibeFile.Decode(&f)
-				instruction = ""
-				if errXD == nil {
+				errFile := receibeFile.Decode(&f)
+
+				if errFile == nil {
+					go s.SendFile(&f, client.ID)
+
 					fmt.Println("Archivo recibido: ", f)
 				} else {
 					fmt.Println("Error ", err)
@@ -113,13 +130,15 @@ func (s *Server) HandleClient(c net.Conn) {
 }
 
 func (s *Server) SendChat(msg string, id uint64) {
-
+	var instruction string = "msg"
 	meta := MsgMeta{MsgBody: msg, CliID: id}
 	s.GeneralChat = append(s.GeneralChat, meta)
 	for _, c := range s.Clients {
+		gob.NewEncoder(c.Con).Encode(&instruction)
 		gob.NewEncoder(c.Con).Encode(&meta)
 	}
 }
+
 func main() {
 	/* serever init */
 	s := Server{Host: ":5555", ClientIds: 0}

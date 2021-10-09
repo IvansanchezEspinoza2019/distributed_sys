@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 )
 
 type MsgMeta struct {
@@ -29,6 +31,7 @@ type Client struct {
 	GeneralChat  []MsgMeta
 	HasDirectory bool
 	DirName      string
+	Connected    bool
 }
 
 /*** Client main functions ****/
@@ -39,7 +42,7 @@ func (c *Client) Init() error {
 		return err
 	}
 	c.Connection = con
-
+	c.Connected = true
 	gob.NewDecoder(con).Decode(&c.ID)
 	return nil
 }
@@ -124,6 +127,11 @@ func (c *Client) ListenForUpdates() {
 					file := File{}
 					gob.NewDecoder(c.Connection).Decode(&file)
 					go c.HandleFile(&file)
+				} else if instruction == "disconnect" {
+					fmt.Println("\nSERVER DISCONNECTED!!\n")
+					c.Connection.Close()
+					c.Connected = false
+					break
 				}
 			}
 		}
@@ -177,12 +185,21 @@ func (c *Client) PrintGlobalChat() {
 	fmt.Println("+------------------------+\n")
 	for _, msg := range c.GeneralChat {
 		if msg.CliID == c.ID {
-			fmt.Printf("\t\t[This client]: %s\n\n", msg.MsgBody)
+			fmt.Printf("\t\t[This client]: %s", msg.MsgBody)
 		} else {
-			fmt.Println(msg.MsgBody + "\n")
+			fmt.Println(msg.MsgBody)
 		}
+		fmt.Println("\n*************\n")
 	}
 	fmt.Println("\n+------------------------")
+}
+
+func (c *Client) Disconenct() {
+	if c.Connection != nil {
+		defer c.Connection.Close()
+		var msg string = "out"
+		gob.NewEncoder(c.Connection).Encode(&msg)
+	}
 }
 
 func main() {
@@ -193,6 +210,7 @@ func main() {
 
 	err := cli.Init() // init the connection with the server
 	if err == nil {
+		go SetupCloseHandler(&cli)
 		fmt.Printf("Client {%d} running...\n\n", cli.ID)
 		defer cli.CloseConnection() // close the connection when this function ends
 		go cli.SendMsg()            // function that sends messges to server
@@ -206,7 +224,10 @@ func main() {
 
 		/* Main rutine */
 		for opc != "4" {
-			menu()
+			if !cli.Connected {
+				fmt.Println("\n--SERVER DISCONNECTED!!--\n")
+			}
+			menu(cli.ID)
 			scanner.Scan()
 			opc = scanner.Text()
 
@@ -222,10 +243,15 @@ func main() {
 				text = scanner.Text()
 				file_channel <- text
 			} else if opc == "3" {
+				fmt.Println("CHAT GENERAL:")
 				cli.PrintGlobalChat()
 			} else {
 				break
 			}
+		}
+
+		for {
+			// just for handling Ctrl+C input
 		}
 	} else {
 		fmt.Println("Error: ", err)
@@ -233,9 +259,20 @@ func main() {
 
 }
 
-func menu() {
+func menu(id uint64) {
+	fmt.Println(".: Client ", id, " :.")
 	fmt.Println("\t1) Enviar mensaje")
 	fmt.Println("\t2) Enviar archivo")
 	fmt.Println("\t3) Mostrar chat")
 	fmt.Print("Opcion: ")
+}
+
+func SetupCloseHandler(cli *Client) {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cli.Disconenct()
+		os.Exit(0)
+	}()
 }

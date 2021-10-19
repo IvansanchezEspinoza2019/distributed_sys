@@ -24,6 +24,7 @@ type Reply struct {
 type MicroService struct {
 	Students map[string]map[string]float64
 	Subjects map[string]map[string]float64
+
 	// ejemplo: https://stackoverflow.com/questions/68281518/golang-rpc-get-wrong-struct-variable
 }
 

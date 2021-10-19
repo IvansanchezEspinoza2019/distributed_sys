@@ -31,7 +31,7 @@ func client() {
 	var opc string
 	scanner := bufio.NewScanner(os.Stdin)
 
-	for opc != "3" {
+	for opc != "5" {
 		menu()
 		scanner.Scan()
 		opc = scanner.Text()
@@ -40,21 +40,62 @@ func client() {
 			var response Reply
 			data := &StudentSubject{}
 
-			fmt.Print("Name: ")
+			fmt.Print("Student name: ")
 			fmt.Scanln(&data.Name)
 
 			fmt.Print("Subject: ")
 			fmt.Scanln(&data.Subject)
 
-			fmt.Print("Note: ")
+			fmt.Print("Student Note: ")
 			fmt.Scanf("%f", &data.Note)
 			fmt.Scanln()
 
 			err = c.Call("MicroService.AddNoteStudentSubjetc", data, &response)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Println("[ERROR]", err)
 			} else {
 				fmt.Println("Res:", response)
+			}
+		} else if opc == "2" {
+			var (
+				name     string
+				response float64
+			)
+
+			fmt.Print("Student: ")
+			fmt.Scanln(&name)
+
+			err = c.Call("MicroService.StudentAverege", name, &response)
+			if err != nil {
+				fmt.Println("[ERROR]", err)
+			} else {
+				fmt.Println("\tNOTE AVERAGE: [", response, "]")
+			}
+
+		} else if opc == "3" {
+			var (
+				response float64
+			)
+
+			err = c.Call("MicroService.GeneralAverage", "General", &response)
+			if err != nil {
+				fmt.Println("[ERROR]", err)
+			} else {
+				fmt.Println("\nGENERAL AVERAGE: [", response, "]")
+			}
+		} else if opc == "4" {
+			var (
+				subject  string
+				response float64
+			)
+			fmt.Print("Subject: ")
+			fmt.Scanln(&subject)
+
+			err = c.Call("MicroService.SubjectAvg", subject, &response)
+			if err != nil {
+				fmt.Println("[ERROR]", err)
+			} else {
+				fmt.Println("\tSUBJECT AVERAGE: [", response, "]")
 			}
 		}
 	}
@@ -67,5 +108,8 @@ func main() {
 func menu() {
 	fmt.Println("\n.: Menu :.\n")
 	fmt.Println("1 ) Agregar nota de estudiante")
+	fmt.Println("2 ) Promedio de un Alumno")
+	fmt.Println("3 ) Promedio General")
+	fmt.Println("4 ) Promedio Materia")
 	fmt.Print("Opcion: ")
 }

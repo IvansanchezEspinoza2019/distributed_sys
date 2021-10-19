@@ -53,10 +53,89 @@ func (m *MicroService) AddNoteStudentSubjetc(data *StudentSubject, response *Rep
 		// create the subject
 		m.Subjects[data.Subject] = student
 	}
-	fmt.Println("STUDENTS: ", m.Students)
-	fmt.Println("SUBJECTS: ", m.Subjects)
+	fmt.Println("\n.: STUDENTS :.")
+	for student, subjets := range m.Students {
+		fmt.Println(student, "{")
+		for subject, sv := range subjets {
+			fmt.Println("\t"+subject+": ", sv)
+		}
+		fmt.Println("}")
+	}
+
+	fmt.Println("\n.: SUBJECTS :.")
+	for subjet, students := range m.Subjects {
+		fmt.Println(subjet, "{")
+		for student, sv := range students {
+			fmt.Println("\t"+student+": ", sv)
+		}
+		fmt.Println("}")
+	}
+	fmt.Println("----------------------------------")
 	response.Msg = "EXITO"
 	response.Status = 200
+	return nil
+}
+
+func (m *MicroService) StudentAverege(studentName string, response *float64) error {
+	/* clculates the student averega of all its subjects*/
+
+	if v, exists := m.Students[studentName]; exists {
+		if exists {
+			var avg float64
+			for _, sv := range v {
+				avg += sv
+			}
+			*response = (avg) / float64(len(v))
+		} else {
+			return errors.New("No existe el estudiante")
+		}
+	} else {
+		return errors.New("No existe el estudiante")
+	}
+	return nil
+}
+
+func (m *MicroService) GeneralAverage(typeAVG string, response *float64) error {
+	/* calculates the note aberage of all students */
+
+	if len(m.Students) == 0 {
+		return errors.New("Vacío")
+	}
+
+	var totalAvg float64
+	for student, subjects := range m.Students {
+		var avg float64
+		for _, sv := range subjects {
+			avg += sv
+		}
+		avg = (avg / float64(len(subjects)))
+		totalAvg += avg
+		fmt.Println(student+": ", avg)
+	}
+	fmt.Println("\n-----------------")
+	*response = (totalAvg / float64(len(m.Students)))
+	return nil
+}
+
+func (m *MicroService) SubjectAvg(subject string, response *float64) error {
+	/* calculates the avdg of a subject */
+
+	if len(m.Subjects) == 0 {
+		return errors.New("Vacio")
+	}
+	if students, exists := m.Subjects[subject]; exists {
+		if exists {
+			var svg float64
+			for _, sv := range students {
+				svg += sv
+			}
+			*response = (svg / float64(len(students)))
+		} else {
+			return errors.New("NO existe la materia")
+		}
+	} else {
+		return errors.New("NO existe la materia")
+	}
 	return nil
 }
 

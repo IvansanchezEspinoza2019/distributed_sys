@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Student Note</title>
+</head>
+<body>
+    
+    <form action="/add-student-note" method="POST">
+        <h2>Please, fill the form</h2>
+        <br>
+        <label for="student">Student: </label>
+        <input id="student" type="text" name="student" placeholder="Type the student name">
+        <br>
+        <br>
+        <label for="subject">Subject: </label>
+        <input id="subject" type="text" name="subject" placeholder="Subject name">
+        <br>
+        <br>
+        <label for="note">Note: </label>
+        <input id="note" type="number" min="0" max="100" name="note" placeholder="Note between 0 and 100">
+        <br>
+
+        <input type="submit" value="Send">
+    </form>
+</body>
+</html>

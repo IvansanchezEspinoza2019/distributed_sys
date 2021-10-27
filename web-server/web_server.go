@@ -22,13 +22,15 @@ func (w *WebServer) Run() {
 	http.HandleFunc("/", w.welcome)
 	http.HandleFunc("/add-student-note", w.newStudentNote)
 	http.HandleFunc("/student-grade", w.StudentGrade)
+	http.HandleFunc("/general-grade", w.GeneralGrade)
+	http.HandleFunc("/subject-grade", w.SubjectGrade)
 
 	/* Run server*/
 	http.ListenAndServe(":9999", nil)
 }
 
+/* Handler functions (listen por client requests)*/
 func (w *WebServer) StudentGrade(res http.ResponseWriter, req *http.Request) {
-
 	switch req.Method {
 	case "GET":
 		w.SendFormStudentGrade(res)
@@ -44,7 +46,90 @@ func (w *WebServer) StudentGrade(res http.ResponseWriter, req *http.Request) {
 
 }
 
+func (w *WebServer) SubjectGrade(res http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		w.sendFormSubjectGrade(res)
+	case "POST":
+		if err := req.ParseForm(); err != nil {
+			fmt.Println(err)
+			return
+
+		}
+
+		w.GetSubjectNote(res, req.FormValue("selected-subject"))
+	}
+}
+
+func (w *WebServer) newStudentNote(res http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		w.sendAddStudentNoteForm(res)
+	case "POST":
+		if err := req.ParseForm(); err != nil {
+			fmt.Fprintf(res, " ParseForm() $v", err)
+			return
+		}
+		note, _ := strconv.ParseFloat(req.FormValue("note"), 64)
+		w.addStudentNote(req.FormValue("student"), req.FormValue("subject"), note)
+	}
+
+}
+
+func (w *WebServer) GeneralGrade(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set(
+		"Content-Type",
+		"text/html",
+	)
+	html, _ := readHTML("./html/response.html")
+
+	/* calculates the note aberage of all students */
+
+	if len(w.Students) == 0 {
+		fmt.Fprintf(res, "Vacio")
+		return
+	}
+
+	var students string
+	var totalAvg float64
+
+	students = "<h2>Promedio general</h2>"
+	for student, subjects := range w.Students {
+		var avg float64
+		for _, sv := range subjects {
+			avg += sv
+		}
+		avg = (avg / float64(len(subjects)))
+		totalAvg += avg
+		students += "<li> " + student + " <strong>(" + strconv.FormatFloat(avg, 'f', 2, 64) + ")</strong> </li>"
+	}
+
+	fmt.Fprintf(res, html, "<ul> "+students+"</ul>")
+}
+
+func (w *WebServer) sendFormSubjectGrade(res http.ResponseWriter) {
+	res.Header().Set(
+		"Content-Type",
+		"text/html",
+	)
+	html, _ := readHTML("./html/form-select-subject.html")
+
+	var subjects string
+	for subject, _ := range w.Subjects {
+		subjects += "<option value='" + subject + "'>" + subject + "</option>"
+	}
+	fmt.Fprintf(res, html, subjects)
+}
+
 func (w *WebServer) GetStudentNote(res http.ResponseWriter, studentName string) {
+	/* Returns the student grade*/
+
+	res.Header().Set(
+		"Content-Type",
+		"text/html",
+	)
+
+	html, _ := readHTML("./html/response.html")
 
 	var grade float64 = 0.0
 	if v, exists := w.Students[studentName]; exists {
@@ -55,20 +140,49 @@ func (w *WebServer) GetStudentNote(res http.ResponseWriter, studentName string) 
 			}
 			grade = (avg) / float64(len(v))
 		} else {
-			fmt.Println("No existe el estudiante")
+			fmt.Fprintf(res, html, "No existe el estudiante")
+			return
 		}
 	} else {
-		fmt.Println("No existe el estudiante")
-	}
+		fmt.Fprintf(res, html, "No existe el estudiante")
+		return
 
+	}
+	var s string = "EL promedio de '" + studentName + "' es <strong>" + strconv.FormatFloat(grade, 'f', 2, 64) + "</strong>"
+	fmt.Fprintf(res, html, s)
+}
+
+func (w *WebServer) GetSubjectNote(res http.ResponseWriter, subjectName string) {
 	res.Header().Set(
 		"Content-Type",
 		"text/html",
 	)
 
 	html, _ := readHTML("./html/response.html")
-	s := fmt.Sprintf("%f", grade)
-	fmt.Fprintf(res, html, "EL promedio del estudiante "+studentName+" es ", s)
+	var grade float64 = 0.0
+	/* calculates the avdg of a subject */
+
+	if len(w.Subjects) == 0 {
+		fmt.Fprintf(res, "Vacio")
+		return
+	}
+	if students, exists := w.Subjects[subjectName]; exists {
+		if exists {
+			var svg float64
+			for _, sv := range students {
+				svg += sv
+			}
+			grade = (svg / float64(len(students)))
+		} else {
+			fmt.Fprintf(res, "NO existe la materia")
+			return
+		}
+	} else {
+		fmt.Fprintf(res, "NO existe la materia")
+		return
+	}
+
+	fmt.Fprintf(res, html, "La materia '"+subjectName+"' tiene <strong>"+strconv.FormatFloat(grade, 'f', 2, 64)+"</strong>")
 }
 
 func (w *WebServer) SendFormStudentGrade(res http.ResponseWriter) {
@@ -158,22 +272,6 @@ func (w *WebServer) welcome(res http.ResponseWriter, req *http.Request) {
 			</body>
 		</html>`,
 	)
-}
-
-func (w *WebServer) newStudentNote(res http.ResponseWriter, req *http.Request) {
-	/* */
-	switch req.Method {
-	case "GET":
-		w.sendAddStudentNoteForm(res)
-	case "POST":
-		if err := req.ParseForm(); err != nil {
-			fmt.Fprintf(res, " ParseForm() $v", err)
-			return
-		}
-		note, _ := strconv.ParseFloat(req.FormValue("note"), 64)
-		w.addStudentNote(req.FormValue("student"), req.FormValue("subject"), note)
-	}
-
 }
 
 func (w *WebServer) sendAddStudentNoteForm(res http.ResponseWriter) {

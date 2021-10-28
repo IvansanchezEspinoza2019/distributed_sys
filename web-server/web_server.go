@@ -71,7 +71,7 @@ func (w *WebServer) newStudentNote(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 		note, _ := strconv.ParseFloat(req.FormValue("note"), 64)
-		w.addStudentNote(req.FormValue("student"), req.FormValue("subject"), note)
+		w.addStudentNote(res, req.FormValue("student"), req.FormValue("subject"), note)
 	}
 
 }
@@ -93,7 +93,7 @@ func (w *WebServer) GeneralGrade(res http.ResponseWriter, req *http.Request) {
 	var students string
 	var totalAvg float64
 
-	students = "<h2>Promedio general</h2>"
+	students = "<h2>Promedio de cada estudiante</h2>"
 	for student, subjects := range w.Students {
 		var avg float64
 		for _, sv := range subjects {
@@ -103,8 +103,8 @@ func (w *WebServer) GeneralGrade(res http.ResponseWriter, req *http.Request) {
 		totalAvg += avg
 		students += "<li> " + student + " <strong>(" + strconv.FormatFloat(avg, 'f', 2, 64) + ")</strong> </li>"
 	}
-
-	fmt.Fprintf(res, html, "<ul> "+students+"</ul>")
+	generalAvg := "<br><div><h2>Promedio General:  <span><strong>" + strconv.FormatFloat((totalAvg/float64(len(w.Students))), 'f', 2, 64) + "</strong></h2></div>"
+	fmt.Fprintf(res, html, "<ul> "+students+"</ul>"+generalAvg)
 }
 
 func (w *WebServer) sendFormSubjectGrade(res http.ResponseWriter) {
@@ -206,7 +206,15 @@ func (w *WebServer) SendFormStudentGrade(res http.ResponseWriter) {
 	)
 }
 
-func (w *WebServer) addStudentNote(studentName string, subjectName string, note float64) {
+func (w *WebServer) addStudentNote(res http.ResponseWriter, studentName string, subjectName string, note float64) {
+
+	res.Header().Set(
+		"Content-Type",
+		"text/html",
+	)
+
+	html, _ := readHTML("./html/response.html")
+	var response string
 	// add student info
 	if _, exists := w.Students[studentName]; exists { //  already exists
 		if exists {
@@ -230,23 +238,25 @@ func (w *WebServer) addStudentNote(studentName string, subjectName string, note 
 		// create the subject
 		w.Subjects[subjectName] = student
 	}
-	fmt.Println("\n.: STUDENTS :.")
+	response = "<div><h2>STUDENTS</h2>"
 	for student, subjets := range w.Students {
-		fmt.Println(student, "{")
+		response += student + "<ul>"
 		for subject, sv := range subjets {
-			fmt.Println("\t"+subject+": ", sv)
+			response += "<li>" + subject + " <strong>" + strconv.FormatFloat(sv, 'f', 2, 64) + "</strong></li>"
 		}
-		fmt.Println("}")
+		response += "</ul>"
 	}
 
-	fmt.Println("\n.: SUBJECTS :.")
+	response += "<div><h2>SUBJECTS</h2>"
 	for subjet, students := range w.Subjects {
-		fmt.Println(subjet, "{")
+		response += subjet + "<ul>"
 		for student, sv := range students {
-			fmt.Println("\t"+student+": ", sv)
+			response += "<li>" + student + " <strong>" + strconv.FormatFloat(sv, 'f', 2, 64) + "</strong></li>"
+
 		}
-		fmt.Println("}")
+		response += "</ul>"
 	}
+	fmt.Fprintf(res, html, response)
 }
 
 func main() {
@@ -261,17 +271,11 @@ func (w *WebServer) welcome(res http.ResponseWriter, req *http.Request) {
 		"Content-Type",
 		"text/html",
 	)
-	fmt.Fprintf(res,
-		`<DOCTYPE html>
-		<html>
-			<head>
-				<title>Home</title>
-			</head>
-			<body>
-				<h1>Home page!</h1>
-			</body>
-		</html>`,
-	)
+
+	html, _ := readHTML("./html/home.html")
+
+	fmt.Fprintf(res, html)
+
 }
 
 func (w *WebServer) sendAddStudentNoteForm(res http.ResponseWriter) {

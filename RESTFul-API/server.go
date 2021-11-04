@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,15 +16,14 @@ type Student struct {
 
 type StudentData struct {
 	ID      uint64  `json: "id"`
-	Student string  `json:  "estudiante"`
+	Student string  `json: "estudiante"`
 	Subject string  `json: "materia"`
 	Note    float64 `json: "promedio"`
 }
 
 var Students map[uint64]Student
-var Subjects map[string]map[string]float64
 
-/***** Methods ******/
+/************** Methods **************/
 /*All students*/
 func GetAllStudents() ([]byte, error) {
 	jsonData, err := json.MarshalIndent(Students, "", "    ")
@@ -37,12 +35,10 @@ func GetAllStudents() ([]byte, error) {
 
 /* add student data*/
 func AddStudentData(data StudentData) ([]byte, error) {
-	fmt.Println(data)
 	jsonRes := []byte(`{"Msg": "Ok"}`)
 	_, exists := Students[data.ID]
 	if exists {
-		//Students[data.Student][data.Subject] = data.Note
-		return []byte(`{"Msg":"Ya añadiste a este estudiante, si queires actualizar su informacion us PUT"}`), errors.New("Estudiante repetido")
+		Students[data.ID].Subjects[data.Subject] = data.Note
 	} else {
 		student := Student{ID: data.ID, Subjects: make(map[string]float64), Student: data.Student}
 		student.Subjects[data.Subject] = data.Note
@@ -57,18 +53,43 @@ func UpdateNote(id uint64, data StudentData) ([]byte, error) {
 
 	_, exists := Students[id]
 	if !exists {
-		return []byte(`{"Msg":"NO existe el estudiante"}`), errors.New("Student NOT found")
+		return nil, errors.New("Student NOT found")
 	}
 
 	_, existsSub := Students[id].Subjects[data.Subject]
 	if !existsSub {
-		return []byte(`{"Msg":"NO existe la materia"}`), errors.New("Subject NOT found")
+		return nil, errors.New("Subject NOT found")
 	}
 	Students[id].Subjects[data.Subject] = data.Note
-	fmt.Println("Aqui esta", Students[id])
 	return jsonRes, nil
 }
 
+/* Get one student*/
+func GetStudent(id uint64) ([]byte, error) {
+
+	student, exists := Students[id]
+	if !exists {
+		return nil, errors.New("Student NOT found")
+	}
+	jsonData, err := json.MarshalIndent(student, "", "  ")
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+	return jsonData, nil
+}
+
+/* delete a student */
+func DeleteStudent(id uint64) ([]byte, error) {
+	jsonRes := []byte(`{"Msg": "Ok"}`)
+	_, exists := Students[id]
+	if !exists {
+		return nil, errors.New("Student NOT found")
+	}
+	delete(Students, id)
+	return jsonRes, nil
+}
+
+/*********** Handle requests *********/
 func HandleStudents(res http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
@@ -125,6 +146,10 @@ func HandleStudentId(res http.ResponseWriter, req *http.Request) {
 
 		jsonRes, errUpdate := UpdateNote(id, updateS)
 		if errUpdate != nil {
+			if errUpdate.Error() == "Subject NOT found" || errUpdate.Error() == "Student NOT found" {
+				http.Error(res, errUpdate.Error(), http.StatusNotFound)
+				return
+			}
 			http.Error(res, errUpdate.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -135,7 +160,34 @@ func HandleStudentId(res http.ResponseWriter, req *http.Request) {
 		)
 
 		res.Write(jsonRes)
+	case "GET":
+		studentJson, err := GetStudent(id)
+		if err != nil {
+			if err.Error() == "Student NOT found" {
+				http.Error(res, err.Error(), http.StatusNotFound)
+				return
+			}
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+		}
 
+		res.Header().Set(
+			"Content-Type",
+			"application/json",
+		)
+		res.Write(studentJson)
+
+	case "DELETE":
+		resJson, err := DeleteStudent(id)
+		if err != nil {
+			http.Error(res, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		res.Header().Set(
+			"Content-Type",
+			"application/json",
+		)
+		res.Write(resJson)
 	}
 }
 func main() {

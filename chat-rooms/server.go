@@ -1,9 +1,16 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"net/rpc"
 )
+
+type ServerInfo struct {
+	Temtic     string
+	TotalUsers uint64
+}
 
 /* Server for the distint tematics*/
 type Server struct {
@@ -15,13 +22,8 @@ type Server struct {
 	Clients   map[uint64]net.Conn
 }
 
-func (s *Server) Init(host string, port string) error {
-	const (
-		CONN_HOST = "localhost"
-		CONN_PORT = "9999"
-		CONN_TYPE = "tcp"
-	)
-	listener, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
+func (s *Server) Init() error {
+	listener, err := net.Listen("tcp", ":"+s.Port)
 
 	if err != nil {
 		return err
@@ -48,15 +50,71 @@ func (s *Server) HandleClient(c net.Conn) {
 	s.IDCounter++
 }
 
+/********************** Microservice server ***********************/
+type MicroService struct {
+	ChatServers []*Server
+}
+
+func (m *MicroService) GetChatRooms(message string, response *[]ServerInfo) error {
+	if len(m.ChatServers) == 0 {
+		return errors.New("No servers available")
+	}
+	for _, server := range m.ChatServers {
+		si := ServerInfo{Temtic: server.Title, TotalUsers: uint64(len(server.Clients))}
+		*response = append(*response, si)
+	}
+	return nil
+}
+
 func main() {
-	s := Server{Port: "9997", Host: "localhost"}
-	err := s.Init("localhost", "997")
+	/* chat rooms*/
+	s1 := Server{Title: "Videogames", Host: "", Port: "9997"}
+	s2 := Server{Title: "Cooking", Host: "", Port: "9998"}
+	s3 := Server{Title: "General", Host: "", Port: "9999"}
+
+	service := &MicroService{ChatServers: []*Server{
+		&s1, &s2, &s3,
+	}}
+
+	err := InitializeChatRooms(service)
+
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	go s.Run()
+	// run every chat room
+	for _, server := range service.ChatServers {
+		go server.Run()
+	}
+	/** Microservice Server **/
+
+	serviceServer, errServer := net.Listen("tcp", ":8000")
+	if errServer != nil {
+		fmt.Println(errServer)
+		return
+	}
+
+	fmt.Println("Chat Room Running!")
+	/* Register RPC service*/
+	rpc.Register(service)
+	/* listen for clients */
+	for {
+		c, err := serviceServer.Accept()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		go rpc.ServeConn(c)
+	}
 
 	var input string
 	fmt.Scanln(&input)
+}
+
+func InitializeChatRooms(m *MicroService) error {
+	/* Initialize every caht room*/
+	for _, server := range m.ChatServers {
+		server.Init()
+	}
+	return nil
 }

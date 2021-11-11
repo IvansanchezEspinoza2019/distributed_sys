@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/rpc"
@@ -42,18 +43,24 @@ func (m *MiddleWareApi) ChatRooms(res http.ResponseWriter, req *http.Request) {
 }
 
 func (m *MiddleWareApi) GetChatRooms(res http.ResponseWriter) {
-	/*var response []ServerInfo
+	/* Make petition to the chat server*/
+	var response []ServerInfo
 	err := m.RpcClient.Call("MicroService.GetChatRooms", "nil", &response)
 	if err != nil {
-		fmt.Println("[ERROR]", err)
-	} else {
-		fmt.Println("\nROOMS: [", response, "]")
-	}*/
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	/* Response to the client */
 	res.Header().Set(
 		"Content-Type",
 		"application/json",
 	)
-	res.Write([]byte(`{"Message":"Api initialized"}`))
+	resJson, errJson := json.MarshalIndent(response, "", "  ")
+	if errJson != nil {
+		http.Error(res, errJson.Error(), http.StatusInternalServerError)
+		return
+	}
+	res.Write(resJson)
 }
 
 func main() {

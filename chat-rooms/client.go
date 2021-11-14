@@ -165,7 +165,7 @@ func (c *Client) ServersMenu() int {
 func (c *Client) Init(port string) error {
 	fmt.Println("Port", port)
 	/* connects to the server  */
-	con, err := net.Dial("tcp", "localhost:9997") //":"+port
+	con, err := net.Dial("tcp", ":"+port) //":"+port
 	if err != nil {
 		return err
 	}

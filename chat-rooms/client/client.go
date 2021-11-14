@@ -13,21 +13,9 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-)
 
-type ServerInfo struct {
-	Temtic     string
-	TotalUsers uint64
-}
-type File struct {
-	Filename string
-	Content  []byte
-	Creator  uint64
-}
-type MsgMeta struct {
-	CliID   uint64 // who sends the message
-	MsgBody string
-}
+	"../common"
+)
 
 /* strunct client */
 type Client struct {
@@ -37,7 +25,7 @@ type Client struct {
 	MsgChan      chan string
 	FileChan     chan string
 	HasDirectory bool
-	GeneralChat  []MsgMeta
+	GeneralChat  []common.MsgMeta
 	DirName      string
 	Connected    bool
 	ApiAdd       string
@@ -61,7 +49,7 @@ func (c *Client) MakePetitionApi() { // to test the api
 	fmt.Println(string(responseData))
 
 	// convert it to a Go datatype
-	var servers []ServerInfo
+	var servers []common.ServerInfo
 	json.Unmarshal([]byte(responseData), &servers)
 
 	fmt.Println("New", servers)
@@ -74,7 +62,7 @@ func (c *Client) FirstMenu() {
 	fmt.Print("Opcion: ")
 }
 
-func (c *Client) ApiCallGetRooms() ([]ServerInfo, error) {
+func (c *Client) ApiCallGetRooms() ([]common.ServerInfo, error) {
 	// make petition to middleware
 	response, err := http.Get(c.ApiAdd + "/chatRooms")
 	if err != nil {
@@ -86,7 +74,7 @@ func (c *Client) ApiCallGetRooms() ([]ServerInfo, error) {
 		return nil, errRes
 	}
 	// convert it to a Go datatype
-	var servers []ServerInfo
+	var servers []common.ServerInfo
 	json.Unmarshal([]byte(responseData), &servers)
 
 	return servers, nil
@@ -109,26 +97,19 @@ func (c *Client) ApiCallGetIPServer(serverName string) (string, error) {
 }
 
 func (c *Client) MakeConnectionToServer(serverName string) int {
-	fmt.Println(serverName)
-	fmt.Println("dsdfse")
 	// get server IP
 	IP, errIP := c.ApiCallGetIPServer(serverName)
-
 	if errIP != nil {
 		fmt.Println(errIP)
 		return 1
 	}
 
 	// make connection between client and server
-	fmt.Println("before init")
 	errConection := c.Init(IP)
-	fmt.Println("after init")
 	if errConection != nil {
-		fmt.Println("inside err")
 		fmt.Println(errConection)
 		return 1
 	}
-	fmt.Println(c)
 	c.ChatName = serverName
 	return 0
 }
@@ -163,18 +144,14 @@ func (c *Client) ServersMenu() int {
 
 /************* Connection With a specific CHAT ROOM **************/
 func (c *Client) Init(port string) error {
-	fmt.Println("Port", port)
-	/* connects to the server  */
+	/* connects to the server */
 	con, err := net.Dial("tcp", ":"+port) //":"+port
 	if err != nil {
 		return err
 	}
 	c.Connection = con
-	fmt.Println("CONNECTION", c.Connection)
 	c.Connected = true
-	fmt.Println("Befre waitting for server")
 	gob.NewDecoder(con).Decode(&c.ID)
-	fmt.Println("After waitting for server")
 	return nil
 }
 
@@ -207,7 +184,7 @@ func (c *Client) ProccesReadFile(filename string) {
 		}
 		total := stat.Size()
 
-		f := File{Filename: stat.Name(), Content: make([]byte, total)}
+		f := common.File{Filename: stat.Name(), Content: make([]byte, total)}
 		count, err := file.Read(f.Content)
 		if err != nil {
 			fmt.Println(err)
@@ -243,11 +220,11 @@ func (c *Client) ListenForUpdates() {
 			err := receibe.Decode(&instruction)
 			if err == nil {
 				if instruction == "msg" {
-					meta := MsgMeta{}
+					meta := common.MsgMeta{}
 					gob.NewDecoder(c.Connection).Decode(&meta)
 					c.GeneralChat = append(c.GeneralChat, meta)
 				} else if instruction == "file" {
-					file := File{}
+					file := common.File{}
 					gob.NewDecoder(c.Connection).Decode(&file)
 					go c.HandleFile(&file)
 				} else if instruction == "disconnect" {
@@ -261,8 +238,8 @@ func (c *Client) ListenForUpdates() {
 	}
 }
 
-func (c *Client) HandleFile(file *File) {
-	c.GeneralChat = append(c.GeneralChat, MsgMeta{CliID: file.Creator, MsgBody: file.Filename})
+func (c *Client) HandleFile(file *common.File) {
+	c.GeneralChat = append(c.GeneralChat, common.MsgMeta{CliID: file.Creator, MsgBody: file.Filename})
 
 	if !c.HasDirectory {
 		_, err := os.Stat("test")
@@ -357,8 +334,11 @@ func main() {
 	/* When connected to a chat server*/
 	go SetupCloseHandler(&cli)
 	fmt.Printf("Client {%d} running... on server {%s}\n\n", cli.ID, cli.ChatName)
-	defer cli.CloseConnection() // close the connection when this function ends
-	go cli.SendMsg()            // function that sends messges to server
+	// close the connection when this function ends
+	defer cli.CloseConnection()
+	// function that sends messges to server
+	go cli.SendMsg()
+	// function that sends files to the server
 	go cli.SendFile()
 	go cli.ListenForUpdates()
 
@@ -376,15 +356,17 @@ func main() {
 		opc = scanner.Text()
 
 		if opc == "1" {
-			/*  creates the message */
+			/* creates the message */
 			fmt.Print("Msg: ")
 			scanner.Scan()
 			text = scanner.Text()
-			msg_channel <- text // sends the message through the channel
+			// sends the message through the channel
+			msg_channel <- text
 		} else if opc == "2" {
 			fmt.Println("Filename: ")
 			scanner.Scan()
 			text = scanner.Text()
+			// sends the filename to find the file to be subbmitted to chat room
 			file_channel <- text
 		} else if opc == "3" {
 			fmt.Println("CHAT GENERAL:")
@@ -394,10 +376,10 @@ func main() {
 		}
 	}
 
+	fmt.Println("\nType [Ctrl+C] command to exit..")
 	for {
 		// just for handling Ctrl+C input
 	}
-
 }
 
 func SetupCloseHandler(cli *Client) {

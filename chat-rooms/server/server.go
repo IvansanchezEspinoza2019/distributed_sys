@@ -6,22 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
+
+	"../common"
 )
-
-type Cli struct {
-	ID  uint64
-	Con net.Conn
-}
-
-type MsgMeta struct {
-	CliID   uint64 // who sends the message
-	MsgBody string
-}
-
-type ServerInfo struct {
-	Temtic     string
-	TotalUsers uint64
-}
 
 /* Server for the distint tematics*/
 type Server struct {
@@ -29,9 +16,10 @@ type Server struct {
 	Listener    net.Listener
 	Port        string
 	Host        string
-	GeneralChat []MsgMeta
+	Files       []common.File
+	GeneralChat []common.MsgMeta
 	IDCounter   uint64
-	Clients     map[uint64]Cli
+	Clients     map[uint64]net.Conn
 }
 
 func (s *Server) Init() error {
@@ -42,15 +30,14 @@ func (s *Server) Init() error {
 	}
 	s.IDCounter = 0
 	s.Listener = listener
-	s.Clients = make(map[uint64]Cli)
+	s.Clients = make(map[uint64]net.Conn)
 	return nil
 }
 
 func (s *Server) Run() {
-	fmt.Println("Running ", s.Title)
+	/* chat room listenning for clients connections*/
 	for {
 		client, err := s.Listener.Accept()
-		fmt.Println("Client: ", client, "\tListener", s.Listener)
 		if err != nil {
 			continue
 		}
@@ -60,59 +47,54 @@ func (s *Server) Run() {
 
 func (s *Server) HandleClient(c net.Conn) {
 	defer c.Close()
-
-	fmt.Println(s.IDCounter)
 	/* create a new client in the server */
-	client := Cli{ID: s.IDCounter, Con: c}
+	clientID := s.IDCounter
 	s.IDCounter++
 
 	/* Add the new client to the slice */
-	s.Clients[client.ID] = client
+	s.Clients[clientID] = c
 
-	newClient := s.Clients[client.ID]
-	fmt.Println(s.IDCounter)
 	/* sends its assigned id */
-	gob.NewEncoder(newClient.Con).Encode(newClient.ID)
+	gob.NewEncoder(c).Encode(clientID)
 
 	var instruction string
 	var msg string
-	fmt.Println(client)
 
 	/* Listen for client requests */
 	for {
-		if newClient.Con != nil {
+		if c != nil {
 			/* receive the instruction (post_msg, etc) */
-			receive := gob.NewDecoder(newClient.Con)
+			receive := gob.NewDecoder(c)
 			err := receive.Decode(&instruction)
 			if err == nil {
 				if instruction == "post_msg" {
 					/*  reads the data   */
-					receibeMsg := gob.NewDecoder(newClient.Con)
+					receibeMsg := gob.NewDecoder(c)
 					errMsg := receibeMsg.Decode(&msg)
 
 					/* error*/
 					if errMsg == nil {
 						//sends the message through the general chat */
-						go s.SendChat(msg, newClient.ID)
+						go s.SendChat(msg, clientID)
 					} else {
 						fmt.Println("Error ", err)
 						return
 					}
 				} else if instruction == "post_file" {
-					//f := File{}
-					//receibeFile := gob.NewDecoder(newClient.Con)
-					//errFile := receibeFile.Decode(&f)
+					f := common.File{}
+					receibeFile := gob.NewDecoder(c)
+					errFile := receibeFile.Decode(&f)
 
-					/*if errFile == nil {
-					/* send the file to clients*/
-					//go s.SendFile(&f, newClient.ID)
-					/*} else {
+					if errFile == nil {
+						/* send the file to clients*/
+						go s.SendFile(&f, clientID)
+					} else {
 						fmt.Println("Error ", err)
 						return
-					}*/
+					}
 				} else if instruction == "out" {
 					/* client disconnect  */
-					//go s.DisconnectClient(newClient.ID)
+					go s.DisconnectClient(clientID)
 					break
 				}
 			} else { /* error */
@@ -127,11 +109,40 @@ func (s *Server) HandleClient(c net.Conn) {
 func (s *Server) SendChat(msg string, id uint64) {
 	/* sends msg though the general chat*/
 	var instruction string = "msg"
-	meta := MsgMeta{MsgBody: msg, CliID: id}
+	meta := common.MsgMeta{MsgBody: msg, CliID: id}
 	s.GeneralChat = append(s.GeneralChat, meta)
 	for _, c := range s.Clients {
-		gob.NewEncoder(c.Con).Encode(&instruction)
-		gob.NewEncoder(c.Con).Encode(&meta)
+		gob.NewEncoder(c).Encode(&instruction)
+		gob.NewEncoder(c).Encode(&meta)
+	}
+}
+
+func (s *Server) SendFile(file *common.File, id uint64) {
+	/* Sends the file to all connected clients. only gnores the file creator*/
+	var instruction = "file"
+	file.Creator = id
+	s.Files = append(s.Files, *file)
+	s.GeneralChat = append(s.GeneralChat, common.MsgMeta{CliID: id, MsgBody: file.Filename})
+
+	for ID, c := range s.Clients {
+		if ID != id {
+			gob.NewEncoder(c).Encode(&instruction)
+			gob.NewEncoder(c).Encode(file)
+		} else {
+			var special_instruccion string = "msg"
+			meta := common.MsgMeta{MsgBody: file.Filename, CliID: id}
+			gob.NewEncoder(c).Encode(&special_instruccion)
+			gob.NewEncoder(c).Encode(&meta)
+		}
+	}
+}
+
+func (s *Server) DisconnectClient(id uint64) {
+	/* close the connection and removes the client from the server */
+	cli, exists := s.Clients[id]
+	if exists {
+		cli.Close()
+		delete(s.Clients, id)
 	}
 }
 
@@ -140,12 +151,12 @@ type MicroService struct {
 	ChatServers []*Server
 }
 
-func (m *MicroService) GetChatRooms(message string, response *[]ServerInfo) error {
+func (m *MicroService) GetChatRooms(message string, response *[]common.ServerInfo) error {
 	if len(m.ChatServers) == 0 {
 		return errors.New("No servers available")
 	}
 	for _, server := range m.ChatServers {
-		si := ServerInfo{Temtic: server.Title, TotalUsers: uint64(len(server.Clients))}
+		si := common.ServerInfo{Temtic: server.Title, TotalUsers: uint64(len(server.Clients))}
 		*response = append(*response, si)
 	}
 	return nil
@@ -193,7 +204,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("Chat Room Running!")
+	fmt.Println("Chat Rooms Servers Running!")
 	/* Register RPC service*/
 	rpc.Register(service)
 	/* listen for clients */

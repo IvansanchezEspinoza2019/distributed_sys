@@ -6,12 +6,9 @@ import (
 	"net/http"
 	"net/rpc"
 	"strings"
-)
 
-type ServerInfo struct {
-	Temtic     string
-	TotalUsers uint64
-}
+	"../common"
+)
 
 /* Middleware */
 type MiddleWareApi struct {
@@ -79,7 +76,7 @@ func (m *MiddleWareApi) RunApi() {
 // functions
 func (m *MiddleWareApi) GetChatRooms(res http.ResponseWriter) ([]byte, error) {
 	/* Make petition to the chat server*/
-	var response []ServerInfo
+	var response []common.ServerInfo
 	err := m.RpcClient.Call("MicroService.GetChatRooms", "nil", &response)
 	if err != nil {
 		return nil, err
@@ -112,21 +109,4 @@ func main() {
 		return
 	}
 	api.RunApi()
-}
-
-func client() {
-	c, errConn := rpc.Dial("tcp", "localhost:8000/api/v1")
-
-	if errConn != nil {
-		fmt.Println(errConn)
-		return
-	}
-	var response []ServerInfo
-
-	err2 := c.Call("MicroService.GetChatRooms", "nil", &response)
-	if err2 != nil {
-		fmt.Println("[ERROR]", err2)
-	} else {
-		fmt.Println("\nROOMS: [", response, "]")
-	}
 }

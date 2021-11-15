@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -29,6 +30,9 @@ type Client struct {
 	DirName      string
 	Connected    bool
 	ApiAdd       string
+	_admi_pass   string
+	_admin_email string
+	AdminLogged  bool
 }
 
 /*********** Connection to MIDDLEWARE *********/
@@ -94,6 +98,25 @@ func (c *Client) ApiCallGetIPServer(serverName string) (string, error) {
 	var IP string
 	json.Unmarshal([]byte(responseData), &IP)
 	return IP, nil
+}
+
+func (c *Client) ApiCallGetSeversStatus() ([]common.ServerDetail, error) {
+	/* make call to the api*/
+	response, err := http.Get(c.ApiAdd + "/chatRooms/status")
+	if err != nil {
+		return nil, err
+	}
+
+	// get the response body
+	responseData, errRes := ioutil.ReadAll(response.Body)
+	if errRes != nil {
+		return nil, errRes
+	}
+
+	// convert from json to a Go datatype
+	var serverStatus []common.ServerDetail
+	json.Unmarshal([]byte(responseData), &serverStatus)
+	return serverStatus, nil
 }
 
 func (c *Client) MakeConnectionToServer(serverName string) int {
@@ -309,77 +332,137 @@ func (c *Client) Disconenct() {
 	}
 }
 
+/***** Client admin ******/
+func (c *Client) LoginAdmin(pass, email string) {
+	if pass == c._admi_pass && email == c._admin_email {
+		c.AdminLogged = true
+	}
+}
+
+func (c *Client) IsAdminLogged() bool {
+	return c.AdminLogged
+}
+
+func (c *Client) ServersStatus() error {
+	if !c.IsAdminLogged() {
+		return errors.New("not admin")
+	}
+	data, err := c.ApiCallGetSeversStatus()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("\n|Server", "\t\tTotal Users", "\t\tIP")
+	for _, server := range data {
+		fmt.Println(server.Tematic, "\t\t", server.TotalUsers, "\t\t", server.IP)
+	}
+	fmt.Println()
+	return nil
+}
+
 func main() {
+
+	/* args */
+	var args_email, args_password string
+	if len(os.Args) >= 3 {
+		args_email = os.Args[1]
+		args_password = os.Args[2]
+	}
+
 	/* Client init */
 	var msg_channel chan string = make(chan string) // channel to comunicate all the sessages th the client will send
 	var file_channel chan string = make(chan string)
 	/* Initialize client*/
-	cli := Client{ApiAdd: "http://localhost:1001", MsgChan: msg_channel, FileChan: file_channel}
+	cli := Client{ApiAdd: "http://localhost:1001", MsgChan: msg_channel, FileChan: file_channel, AdminLogged: false, _admi_pass: "12345", _admin_email: "admin@gmail.com"}
+	cli.LoginAdmin(args_password, args_email)
 
-	/* First menu */
-	var opc string
-	for opc != "2" {
-		cli.FirstMenu()
-		fmt.Scanln(&opc)
-		if opc == "1" {
-			if cli.ServersMenu() == 0 {
-				fmt.Println("Conneccion exitosa")
+	if !cli.IsAdminLogged() {
+		/* First menu */
+		var opc string
+		for opc != "2" {
+			cli.FirstMenu()
+			fmt.Scanln(&opc)
+			if opc == "1" {
+				if cli.ServersMenu() == 0 {
+					fmt.Println("Conneccion exitosa")
+					break
+				}
+			} else if opc == "2" {
+				os.Exit(0)
+			}
+		}
+
+		/* When connected to a chat server*/
+		go SetupCloseHandler(&cli)
+		fmt.Printf("Client {%d} running... on server {%s}\n\n", cli.ID, cli.ChatName)
+		// close the connection when this function ends
+		defer cli.CloseConnection()
+		// function that sends messges to server
+		go cli.SendMsg()
+		// function that sends files to the server
+		go cli.SendFile()
+		go cli.ListenForUpdates()
+
+		/* auxiliar variables */
+		scanner := bufio.NewScanner(os.Stdin)
+		var text string
+
+		/* Main rutine */
+		for opc != "4" {
+			if !cli.Connected {
+				fmt.Println("\n--SERVER DISCONNECTED!!--\n")
+			}
+			menu(cli.ID, cli.ChatName)
+			scanner.Scan()
+			opc = scanner.Text()
+
+			if opc == "1" {
+				/* creates the message */
+				fmt.Print("Msg: ")
+				scanner.Scan()
+				text = scanner.Text()
+				// sends the message through the channel
+				msg_channel <- text
+			} else if opc == "2" {
+				fmt.Println("Filename: ")
+				scanner.Scan()
+				text = scanner.Text()
+				// sends the filename to find the file to be subbmitted to chat room
+				file_channel <- text
+			} else if opc == "3" {
+				fmt.Println("CHAT GENERAL:")
+				cli.PrintGlobalChat()
+			} else {
 				break
 			}
-		} else if opc == "2" {
-			os.Exit(0)
+		}
+
+		fmt.Println("\nType [Ctrl+C] command to exit..")
+		for {
+			// just for handling Ctrl+C input
+		}
+	} else {
+		// admin
+		fmt.Println("ADMIN")
+		/* First menu */
+		var opc string
+		for opc != "2" {
+			fmt.Println(".: ADMIN :.")
+			fmt.Println("  1) Estado salas de chat")
+			fmt.Println("  2) Salir")
+			fmt.Print("Opcion: ")
+			fmt.Scanln(&opc)
+			if opc == "1" {
+				err := cli.ServersStatus()
+				if err != nil {
+					fmt.Println(err)
+				}
+			} else if opc == "2" {
+				os.Exit(0)
+			}
 		}
 	}
 
-	/* When connected to a chat server*/
-	go SetupCloseHandler(&cli)
-	fmt.Printf("Client {%d} running... on server {%s}\n\n", cli.ID, cli.ChatName)
-	// close the connection when this function ends
-	defer cli.CloseConnection()
-	// function that sends messges to server
-	go cli.SendMsg()
-	// function that sends files to the server
-	go cli.SendFile()
-	go cli.ListenForUpdates()
-
-	/* auxiliar variables */
-	scanner := bufio.NewScanner(os.Stdin)
-	var text string
-
-	/* Main rutine */
-	for opc != "4" {
-		if !cli.Connected {
-			fmt.Println("\n--SERVER DISCONNECTED!!--\n")
-		}
-		menu(cli.ID, cli.ChatName)
-		scanner.Scan()
-		opc = scanner.Text()
-
-		if opc == "1" {
-			/* creates the message */
-			fmt.Print("Msg: ")
-			scanner.Scan()
-			text = scanner.Text()
-			// sends the message through the channel
-			msg_channel <- text
-		} else if opc == "2" {
-			fmt.Println("Filename: ")
-			scanner.Scan()
-			text = scanner.Text()
-			// sends the filename to find the file to be subbmitted to chat room
-			file_channel <- text
-		} else if opc == "3" {
-			fmt.Println("CHAT GENERAL:")
-			cli.PrintGlobalChat()
-		} else {
-			break
-		}
-	}
-
-	fmt.Println("\nType [Ctrl+C] command to exit..")
-	for {
-		// just for handling Ctrl+C input
-	}
 }
 
 func SetupCloseHandler(cli *Client) {

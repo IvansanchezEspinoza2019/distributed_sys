@@ -10,6 +10,12 @@ type ServerInfo struct {
 	TotalUsers uint64
 }
 
+type ServerDetail struct {
+	Tematic    string
+	TotalUsers uint64
+	IP         string
+}
+
 type File struct {
 	Filename string
 	Content  []byte

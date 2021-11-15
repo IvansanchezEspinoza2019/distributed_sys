@@ -25,6 +25,7 @@ func (m *MiddleWareApi) Init() error { // conects to chat servers
 	return nil
 }
 
+/******* handler functions *******/
 func (m *MiddleWareApi) ChatRoomID(res http.ResponseWriter, req *http.Request) {
 	// convertimos el {id} de la url a uint64
 	id := strings.TrimPrefix(req.URL.Path, "/chatRooms/")
@@ -63,11 +64,30 @@ func (m *MiddleWareApi) ChatRooms(res http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (m *MiddleWareApi) ServersStatus(res http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		{
+			resData, err := m.GetServersStatus()
+			if err != nil {
+				http.Error(res, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set(
+				"Content-Type",
+				"application/json",
+			)
+			res.Write(resData)
+		}
+	}
+}
+
 // run api
 func (m *MiddleWareApi) RunApi() {
 	/* Run Api*/
 	http.HandleFunc("/chatRooms", m.ChatRooms)
 	http.HandleFunc("/chatRooms/", m.ChatRoomID)
+	http.HandleFunc("/chatRooms/status", m.ServersStatus) // requires adminpermisions
 
 	fmt.Println("RESTful API Running on http://localhost:" + m.Port)
 	http.ListenAndServe(":"+m.Port, nil)
@@ -101,6 +121,23 @@ func (m *MiddleWareApi) FindIpServer(serverName string) ([]byte, error) {
 	return responseJson, nil
 }
 
+func (m *MiddleWareApi) GetServersStatus() ([]byte, error) {
+	var serverStatus []common.ServerDetail
+	// mget data from server
+	errRpc := m.RpcClient.Call("MicroService.ServersStatus", "", &serverStatus)
+
+	if errRpc != nil {
+		return nil, errRpc
+	}
+	// convert to json format
+	responseJson, errJson := json.MarshalIndent(serverStatus, "", "   ")
+	if errJson != nil {
+		return nil, errJson
+	}
+	return responseJson, nil
+}
+
+// main
 func main() {
 	api := MiddleWareApi{Port: "1001"}
 	err := api.Init()

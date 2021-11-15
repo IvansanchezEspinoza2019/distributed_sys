@@ -176,6 +176,17 @@ func (m *MicroService) GetChatRoomIP(ID string, response *string) error {
 	return errors.New("The server was not found")
 }
 
+func (m *MicroService) ServersStatus(message string, response *[]common.ServerDetail) error {
+	if len(m.ChatServers) == 0 {
+		return errors.New("No servers available")
+	}
+	for _, server := range m.ChatServers {
+		*response = append(*response, common.ServerDetail{IP: "http://localhost:" + server.Port, Tematic: server.Title, TotalUsers: uint64(len(server.Clients))})
+	}
+	return nil
+}
+
+// main //
 func main() {
 	/* chat rooms*/
 	s1 := Server{Title: "Videogames", Host: "", Port: "9997"}

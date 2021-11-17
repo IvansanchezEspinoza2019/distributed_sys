@@ -23,7 +23,7 @@ type Server struct {
 }
 
 func (s *Server) Init() error {
-	listener, err := net.Listen("tcp", ":"+s.Port)
+	listener, err := net.Listen("tcp", s.Host+":"+s.Port)
 
 	if err != nil {
 		return err
@@ -169,7 +169,7 @@ func (m *MicroService) GetChatRoomIP(ID string, response *string) error {
 
 	for _, server := range m.ChatServers {
 		if server.Title == ID {
-			*response = server.Port
+			*response = server.Host + ":" + server.Port
 			return nil
 		}
 	}
@@ -181,7 +181,7 @@ func (m *MicroService) ServersStatus(message string, response *[]common.ServerDe
 		return errors.New("No servers available")
 	}
 	for _, server := range m.ChatServers {
-		*response = append(*response, common.ServerDetail{IP: "http://localhost:" + server.Port, Tematic: server.Title, TotalUsers: uint64(len(server.Clients))})
+		*response = append(*response, common.ServerDetail{IP: "http://" + server.Host + ":" + server.Port, Tematic: server.Title, TotalUsers: uint64(len(server.Clients))})
 	}
 	return nil
 }
@@ -189,9 +189,9 @@ func (m *MicroService) ServersStatus(message string, response *[]common.ServerDe
 // main //
 func main() {
 	/* chat rooms*/
-	s1 := Server{Title: "Videogames", Host: "", Port: "9997"}
-	s2 := Server{Title: "Cooking", Host: "", Port: "9998"}
-	s3 := Server{Title: "General", Host: "", Port: "9999"}
+	s1 := Server{Title: "Videogames", Host: "localhost", Port: "9997"}
+	s2 := Server{Title: "Cooking", Host: "localhost", Port: "9998"}
+	s3 := Server{Title: "General", Host: "localhost", Port: "9999"}
 
 	service := &MicroService{ChatServers: []*Server{
 		&s1, &s2, &s3,

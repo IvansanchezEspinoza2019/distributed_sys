@@ -166,9 +166,9 @@ func (c *Client) ServersMenu() int {
 }
 
 /************* Connection With a specific CHAT ROOM **************/
-func (c *Client) Init(port string) error {
+func (c *Client) Init(IP string) error {
 	/* connects to the server */
-	con, err := net.Dial("tcp", ":"+port) //":"+port
+	con, err := net.Dial("tcp", IP) //":"+port
 	if err != nil {
 		return err
 	}

@@ -90,7 +90,7 @@ func (m *MiddleWareApi) RunApi() {
 	http.HandleFunc("/chatRooms/status", m.ServersStatus) // requires adminpermisions
 
 	fmt.Println("RESTful API Running on http://localhost:" + m.Port)
-	http.ListenAndServe(":"+m.Port, nil)
+	http.ListenAndServe("localhost:"+m.Port, nil)
 }
 
 // functions

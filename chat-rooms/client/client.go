@@ -1,3 +1,9 @@
+/*
+	The client connects to the Middleware by RESTful API.
+	When client chooses the chat room, then the connection is made
+	by TCP protocol for sending and receiving msg's from other clients
+*/
+
 package main
 
 import (
@@ -145,7 +151,7 @@ func (c *Client) ServersMenu() int {
 	}
 	fmt.Println("\t.: SELLECCIONA UN CHAT:.\n")
 	for index, server := range servers {
-		fmt.Println(index, ")\tChat: ["+server.Temtic+"]", "\tUsers: (", server.TotalUsers, ")")
+		fmt.Println(index, ")Chat: ["+server.Temtic+"]", "\tUsers: (", server.TotalUsers, ")")
 	}
 	fmt.Print("\nSelecciona un server: ")
 	var selectedServer string

@@ -1,3 +1,8 @@
+/*
+	The middleware connects to the chats servers by RPC (Microservices).
+	The middleware is a RESTful API.
+*/
+
 package main
 
 import (

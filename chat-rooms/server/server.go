@@ -1,3 +1,8 @@
+/*
+	The server offers RPC service to middleware and connects to clients by RPC protocol
+
+*/
+
 package main
 
 import (
